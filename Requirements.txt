@@ -1,7 +1,5 @@
 streamlit
-opencv-python-headless
-numpy
 tensorflow
-keras
+numpy
 paho-mqtt
 pillow
