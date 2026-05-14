@@ -7,6 +7,7 @@ import json
 import time
 from PIL import Image
 
+
 # =====================================================
 # CONFIGURACIÓN STREAMLIT
 # =====================================================
