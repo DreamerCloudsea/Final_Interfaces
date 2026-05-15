@@ -1,28 +1,20 @@
 import streamlit as st
 import numpy as np
-from tensorflow.keras.models import load_model
 from PIL import Image
+from keras.models import load_model
 import paho.mqtt.client as mqtt
 import json
+import platform
 
 # =====================================================
-# CONFIGURACIÓN STREAMLIT
+# CONFIG STREAMLIT
 # =====================================================
 
-st.set_page_config(page_title="Cofre Inteligente", layout="centered")
+st.set_page_config(page_title="Cofre Inteligente")
 
-st.title("🔐 Sistema de Seguridad IoT")
+st.title("🔐 Cofre Inteligente con IA")
 
-estado_texto = st.empty()
-
-# =====================================================
-# IMÁGENES DEL COFRE
-# =====================================================
-
-COFRE_CERRADO = "cofre_cerrado.png"
-COFRE_ABIERTO = "cofre_abierto.png"
-
-imagen_estado = st.image(COFRE_CERRADO)
+st.write("Python:", platform.python_version())
 
 # =====================================================
 # MQTT
@@ -35,16 +27,14 @@ TOPIC_ESTADO = "cofre/estado"
 TOPIC_VOZ = "cofre/voz"
 
 client = mqtt.Client()
-
 client.connect(BROKER, PUERTO, 60)
-
 client.loop_start()
 
 # =====================================================
-# CARGAR MODELO TEACHABLE MACHINE
+# CARGAR MODELO
 # =====================================================
 
-modelo = load_model("keras_model.h5", compile=False)
+model = load_model("keras_model.h5", compile=False)
 
 with open("labels.txt", "r") as f:
     class_names = f.read().splitlines()
@@ -56,6 +46,16 @@ with open("labels.txt", "r") as f:
 if "autorizado" not in st.session_state:
     st.session_state.autorizado = False
 
+if "cofre_abierto" not in st.session_state:
+    st.session_state.cofre_abierto = False
+
+# =====================================================
+# IMÁGENES
+# =====================================================
+
+COFRE_CERRADO = "cofre_cerrado.png"
+COFRE_ABIERTO = "cofre_abierto.png"
+
 # =====================================================
 # FUNCIÓN MQTT
 # =====================================================
@@ -65,28 +65,42 @@ def publicar(topic, mensaje):
     client.publish(topic, json.dumps(mensaje))
 
 # =====================================================
-# INTERFAZ
+# ESTADO VISUAL DEL COFRE
 # =====================================================
+
+st.subheader("📦 Estado del Cofre")
+
+if st.session_state.cofre_abierto:
+    st.image(COFRE_ABIERTO, width=300)
+else:
+    st.image(COFRE_CERRADO, width=300)
+
+# =====================================================
+# RECONOCIMIENTO FACIAL
+# =====================================================
+
+st.markdown("---")
 
 st.subheader("📷 Reconocimiento Facial")
 
-foto = st.camera_input("Tomar foto")
+img_file_buffer = st.camera_input("Tomar foto")
 
-# =====================================================
-# SI HAY FOTO
-# =====================================================
+if img_file_buffer is not None:
 
-if foto is not None:
-
-    image = Image.open(foto).convert("RGB")
+    image = Image.open(img_file_buffer).convert("RGB")
 
     image = image.resize((224, 224))
 
-    image_array = np.asarray(image)
+    image_array = np.array(image)
 
-    normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
+    normalized_image_array = (
+        image_array.astype(np.float32) / 127.0
+    ) - 1
 
-    data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
+    data = np.ndarray(
+        shape=(1, 224, 224, 3),
+        dtype=np.float32
+    )
 
     data[0] = normalized_image_array
 
@@ -94,7 +108,7 @@ if foto is not None:
     # PREDICCIÓN
     # =====================================================
 
-    prediction = modelo.predict(data, verbose=0)
+    prediction = model.predict(data)
 
     index = np.argmax(prediction)
 
@@ -107,7 +121,7 @@ if foto is not None:
     st.write(f"Confianza: {confidence_score:.2f}")
 
     # =====================================================
-    # DUEÑOS AUTORIZADOS
+    # DUEÑOS
     # =====================================================
 
     if (
@@ -136,22 +150,18 @@ if foto is not None:
         st.session_state.autorizado = False
 
 # =====================================================
-# CONTROL DEL COFRE
+# COMANDOS DEL COFRE
 # =====================================================
 
 st.markdown("---")
 
-st.subheader("🎤 Comandos del Cofre")
-
-# =====================================================
-# SOLO SI ESTÁ AUTORIZADO
-# =====================================================
+st.subheader("🎤 Control del Cofre")
 
 if st.session_state.autorizado:
 
     comando = st.text_input(
-        "Comando",
-        placeholder="Escribe: Abrete o Cierrate"
+        "Escribe un comando",
+        placeholder="Abrete o Cierrate"
     )
 
     # =====================================================
@@ -165,9 +175,11 @@ if st.session_state.autorizado:
             {"cofre": "ABRIR"}
         )
 
-        imagen_estado.image(COFRE_ABIERTO)
+        st.session_state.cofre_abierto = True
 
-        estado_texto.success("📦 Cofre abierto")
+        st.success("📦 Cofre abierto")
+
+        st.rerun()
 
     # =====================================================
     # CERRAR
@@ -180,9 +192,11 @@ if st.session_state.autorizado:
             {"cofre": "CERRAR"}
         )
 
-        imagen_estado.image(COFRE_CERRADO)
+        st.session_state.cofre_abierto = False
 
-        estado_texto.warning("📦 Cofre cerrado")
+        st.warning("📦 Cofre cerrado")
+
+        st.rerun()
 
 else:
 
